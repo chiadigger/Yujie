@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-台股篩選：右上角 + 季線上 + 千元以上（上市+上櫃）
+台股篩選：右上角 + 週月季線上 + 千元以上（上市+上櫃）
 條件：
   1. 股價 >= MIN_PRICE (預設 1000)
-  2. 股價 > 季線(MA60)
-  3. 右上角：近 HIGH_WITHIN 日內創過52週新高，且現價離52週高 <= NEAR_HIGH_PCT
+  2. 股價在週線(MA5)、月線(MA20)、季線(MA60)之上
+  3. 右上角：近 HIGH_WITHIN 日內創過52週新高
 輸出 Markdown 檔（代號可點擊開技術分析頁）。
 環境變數：
   AS_OF_DATE          選填，YYYY-MM-DD，以該日收盤計算
@@ -20,8 +20,7 @@ import yfinance as yf
 
 # ===== 參數 =====
 MIN_PRICE = 1000
-NEAR_HIGH_PCT = 0.05
-HIGH_WITHIN = 20
+HIGH_WITHIN = 60
 AS_OF = os.environ.get("AS_OF_DATE", "").strip()
 OUT_FILE = f"screener_{datetime.now():%Y%m%d}.md"
 
@@ -105,13 +104,12 @@ def evaluate(info):
     ma5 = close.rolling(5).mean().iloc[-1]
     ma20 = close.rolling(20).mean().iloc[-1]
     ma60 = close.rolling(60).mean().iloc[-1]
-    if price <= ma60:                      # 季線上
+    if not (price > ma5 and price > ma20 and price > ma60):   # 週線、月線、季線上
         return None
 
     high52 = high.rolling(250, min_periods=200).max()
     made_high = (high.iloc[-HIGH_WITHIN:] >= high52.iloc[-HIGH_WITHIN:]).any()
-    near_high = price >= high52.iloc[-1] * (1 - NEAR_HIGH_PCT)
-    if not (made_high and near_high):      # 右上角
+    if not made_high:                      # 右上角
         return None
 
     def pct(n):
@@ -132,10 +130,10 @@ def evaluate(info):
 # ===== 輸出 Markdown =====
 def write_md(result):
     date_str = AS_OF or f"{datetime.now():%Y-%m-%d}"
-    lines = [f"# 台股篩選結果（右上角 + 季線上 + 千元以上）",
+    lines = [f"# 台股篩選結果（右上角 + 週月季線上 + 千元以上）",
              "",
              f"- 日期：{date_str}",
-             f"- 條件：股價 ≥ {MIN_PRICE}；股價 > 季線(MA60)；{HIGH_WITHIN} 日內創52週新高且離高點 ≤ {NEAR_HIGH_PCT*100:.0f}%",
+             f"- 條件：股價 ≥ {MIN_PRICE}；股價 > 週線(MA5)、月線(MA20)、季線(MA60)；{HIGH_WITHIN} 日內創過52週新高",
              f"- 符合：**{len(result)}** 檔（依 20MA vs 60MA % 由大到小）",
              ""]
     if result.empty:
