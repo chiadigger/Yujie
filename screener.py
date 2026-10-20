@@ -5,31 +5,25 @@
   1. 股價 >= MIN_PRICE (預設 1000)
   2. 股價 > 季線(MA60)
   3. 右上角：近 HIGH_WITHIN 日內創過52週新高，且現價離52週高 <= NEAR_HIGH_PCT
-輸出 Excel（代號可點擊開技術分析頁），並用 Gmail 寄出。
+輸出 Markdown 檔（代號可點擊開技術分析頁）。
 環境變數：
-  GMAIL_APP_PASSWORD  Gmail 應用程式密碼（寄信用，沒設就只存檔不寄）
   AS_OF_DATE          選填，YYYY-MM-DD，以該日收盤計算
 """
 import os
-import smtplib
 import time
 from datetime import datetime
-from email.message import EmailMessage
 from io import StringIO
 
 import pandas as pd
 import requests
 import yfinance as yf
-from openpyxl import load_workbook
 
 # ===== 參數 =====
 MIN_PRICE = 1000
 NEAR_HIGH_PCT = 0.05
 HIGH_WITHIN = 20
-MAIL_FROM = "Mileschen.working@gmail.com"
-MAIL_TO = "tc8888.cc@gmail.com"
 AS_OF = os.environ.get("AS_OF_DATE", "").strip()
-OUT_FILE = f"screener_{datetime.now():%Y%m%d}.xlsx"
+OUT_FILE = f"screener_{datetime.now():%Y%m%d}.md"
 
 COLUMNS = ["市場", "產業", "代號", "名稱", "股價", "漲跌幅%", "一週漲跌幅%",
            "一個月漲跌幅%", "一季漲跌幅%", "月線(MA20)", "季線(MA60)",
@@ -135,38 +129,37 @@ def evaluate(info):
     }
 
 
-# ===== 輸出 / 寄信 =====
-def save_excel(result):
-    result.to_excel(OUT_FILE, index=False)
-    wb = load_workbook(OUT_FILE)
-    ws = wb.active
-    code_col = COLUMNS.index("代號") + 1
-    for row in range(2, ws.max_row + 1):
-        c = ws.cell(row=row, column=code_col)
-        c.hyperlink = f"https://tw.stock.yahoo.com/quote/{c.value}/technical-analysis"
-        c.style = "Hyperlink"
-    for col in ws.columns:
-        ws.column_dimensions[col[0].column_letter].width = 14
-    wb.save(OUT_FILE)
-
-
-def send_mail(n):
-    pwd = os.environ.get("GMAIL_APP_PASSWORD")
-    if not pwd:
-        print("未設定 GMAIL_APP_PASSWORD，略過寄信")
-        return
-    msg = EmailMessage()
-    msg["From"], msg["To"] = MAIL_FROM, MAIL_TO
-    msg["Subject"] = f"台股篩選（右上角+季線上+千元以上）{datetime.now():%Y-%m-%d}：{n} 檔"
-    msg.set_content(f"符合條件共 {n} 檔，詳見附件 Excel（點代號可開技術分析頁）。")
-    with open(OUT_FILE, "rb") as f:
-        msg.add_attachment(f.read(), maintype="application",
-                           subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           filename=OUT_FILE)
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-        s.login(MAIL_FROM, pwd)
-        s.send_message(msg)
-    print("已寄出")
+# ===== 輸出 Markdown =====
+def write_md(result):
+    date_str = AS_OF or f"{datetime.now():%Y-%m-%d}"
+    lines = [f"# 台股篩選結果（右上角 + 季線上 + 千元以上）",
+             "",
+             f"- 日期：{date_str}",
+             f"- 條件：股價 ≥ {MIN_PRICE}；股價 > 季線(MA60)；{HIGH_WITHIN} 日內創52週新高且離高點 ≤ {NEAR_HIGH_PCT*100:.0f}%",
+             f"- 符合：**{len(result)}** 檔（依 20MA vs 60MA % 由大到小）",
+             ""]
+    if result.empty:
+        lines.append("今日無符合股票。")
+    else:
+        lines.append("| " + " | ".join(COLUMNS) + " |")
+        lines.append("|" + "|".join(["---"] * len(COLUMNS)) + "|")
+        for _, r in result.iterrows():
+            vals = []
+            for c in COLUMNS:
+                v = r[c]
+                if c == "代號":
+                    v = f"[{v}](https://tw.stock.yahoo.com/quote/{v}/technical-analysis)"
+                vals.append(str(v))
+            lines.append("| " + " | ".join(vals) + " |")
+    text = "\n".join(lines) + "\n"
+    with open(OUT_FILE, "w", encoding="utf-8") as f:
+        f.write(text)
+    # GitHub Actions 的執行摘要頁也顯示同一份結果
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as f:
+            f.write(text)
+    print(text)
 
 
 def main():
@@ -189,9 +182,7 @@ def main():
     result = pd.DataFrame(out, columns=COLUMNS)
     if not result.empty:
         result = result.sort_values("20MA vs 60MA %", ascending=False)
-    print(result.to_string(index=False) if not result.empty else "今日無符合股票")
-    save_excel(result)
-    send_mail(len(result))
+    write_md(result)
 
 
 if __name__ == "__main__":
