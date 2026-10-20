@@ -4,7 +4,7 @@
 條件：
   1. 股價 >= MIN_PRICE (預設 1000)
   2. 股價在週線(MA5)、月線(MA20)、季線(MA60)之上
-  3. 右上角：近 HIGH_WITHIN 日內創過52週新高
+  3. 右上角：近 HIGH_WITHIN 日內創過52週新高，且現價離 HIGH_WITHIN 日高點 <= NEAR_HIGH_PCT
 輸出 Markdown 檔（代號可點擊開技術分析頁）。
 環境變數：
   AS_OF_DATE          選填，YYYY-MM-DD，以該日收盤計算
@@ -21,6 +21,7 @@ import yfinance as yf
 # ===== 參數 =====
 MIN_PRICE = 1000
 HIGH_WITHIN = 60
+NEAR_HIGH_PCT = 0.15  # 離60日高點 15% 以內
 AS_OF = os.environ.get("AS_OF_DATE", "").strip()
 OUT_FILE = f"screener_{datetime.now():%Y%m%d}.md"
 
@@ -109,7 +110,9 @@ def evaluate(info):
 
     high52 = high.rolling(250, min_periods=200).max()
     made_high = (high.iloc[-HIGH_WITHIN:] >= high52.iloc[-HIGH_WITHIN:]).any()
-    if not made_high:                      # 右上角
+    high60 = high.iloc[-HIGH_WITHIN:].max()
+    near_high = price >= high60 * (1 - NEAR_HIGH_PCT)
+    if not (made_high and near_high):      # 右上角
         return None
 
     def pct(n):
@@ -121,7 +124,7 @@ def evaluate(info):
         "漲跌幅%": pct(1), "一週漲跌幅%": pct(5), "一個月漲跌幅%": pct(20),
         "一季漲跌幅%": pct(60),
         "月線(MA20)": round(ma20, 2), "季線(MA60)": round(ma60, 2),
-        "股價位置": f"距52週高 {round((price / high52.iloc[-1] - 1) * 100, 2)}%",
+        "股價位置": f"距60日高 {round((price / high60 - 1) * 100, 2)}%",
         "5MA vs 60MA %": round((ma5 / ma60 - 1) * 100, 2),
         "20MA vs 60MA %": round((ma20 / ma60 - 1) * 100, 2),
     }
@@ -133,7 +136,7 @@ def write_md(result):
     lines = [f"# 台股篩選結果（右上角 + 週月季線上 + 千元以上）",
              "",
              f"- 日期：{date_str}",
-             f"- 條件：股價 ≥ {MIN_PRICE}；股價 > 週線(MA5)、月線(MA20)、季線(MA60)；{HIGH_WITHIN} 日內創過52週新高",
+             f"- 條件：股價 ≥ {MIN_PRICE}；股價 > 週線(MA5)、月線(MA20)、季線(MA60)；{HIGH_WITHIN} 日內創過52週新高且離{HIGH_WITHIN}日高點 ≤ {NEAR_HIGH_PCT*100:.0f}%",
              f"- 符合：**{len(result)}** 檔（依 20MA vs 60MA % 由大到小）",
              ""]
     if result.empty:
