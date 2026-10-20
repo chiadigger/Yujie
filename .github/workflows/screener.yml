@@ -13,11 +13,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pandas yfinance openpyxl lxml requests
+      - run: pip install pandas yfinance lxml requests
       - run: python screener.py
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: screener-result
-          path: screener_*.xlsx
+          path: screener_*.md
