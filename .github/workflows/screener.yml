@@ -1,0 +1,23 @@
+name: tw-stock-screener
+
+on:
+  schedule:
+    - cron: "0 12 * * 1-5"   # UTC 12:00 = 台灣時間 20:00，週一到週五
+  workflow_dispatch:          # 也可手動按 Run workflow
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pandas yfinance openpyxl lxml requests
+      - run: python screener.py
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screener-result
+          path: screener_*.xlsx
