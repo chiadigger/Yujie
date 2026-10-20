@@ -5,7 +5,7 @@
   1. 股價 >= MIN_PRICE (預設 1000)
   2. 右上角：現價距 HIGH_WITHIN 日內最高點 <= NEAR_HIGH_PCT
   3. 分組：站上MA5 / 站上MA20 / 站上MA60（可重複出現在多組，至少站上一條才列入）
-輸出 Markdown 檔（代號可點擊開技術分析頁）。
+輸出 README.md（repo 首頁直接顯示，代號可點擊開技術分析頁）。
 環境變數：
   AS_OF_DATE          選填，YYYY-MM-DD，以該日收盤計算
 """
@@ -23,7 +23,7 @@ MIN_PRICE = 1000
 HIGH_WITHIN = 60
 NEAR_HIGH_PCT = 0.15  # 離60日高點 15% 以內
 AS_OF = os.environ.get("AS_OF_DATE", "").strip()
-OUT_FILE = f"screener_{datetime.now():%Y%m%d}.md"
+OUT_FILE = "README.md"   # 寫成 README.md，repo 首頁會直接顯示結果
 
 COLUMNS = ["市場", "產業", "代號", "名稱", "股價", "漲跌幅%", "一週漲跌幅%",
            "一個月漲跌幅%", "一季漲跌幅%", "月線(MA20)", "季線(MA60)",
